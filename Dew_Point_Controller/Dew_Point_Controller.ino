@@ -32,18 +32,26 @@ uint16_t temperature;
 
 Tcontrol tcontrol;
 
+// LED blinker stuff:
+const int ledPin =  LED_BUILTIN;
+int ledState = LOW;
+const long ledInterval = 750;
+unsigned long ledPreviousMillis = 0;
+
 
 
 void setup(void) 
 {
   Serial.begin(9600);
   dac.begin(0x62); // The I2C Address of the MCP4725
+  pinMode(ledPin, OUTPUT);
   
   delay(250);
   
   tcontrol = tcontrols[0];
   temperature = tcontrol.celcius;
   durationTime = (unsigned long)tcontrol.duration*60*1000; // multiplies minutes in duration to milliseconds
+  durationTime = 3000; // Shortening durationTime for testing
   currentMillis = millis();
   previousMillis = currentMillis;
   setTemperature(temperature);
@@ -64,6 +72,20 @@ void loop(void)
     temperature = tcontrol.celcius;
     setTemperature(temperature);
     durationTime = (unsigned long)tcontrol.duration*60*1000;
+    durationTime = 3000; // Shortening durationTime for testing
+  }
+  
+  if (currentMillis - ledPreviousMillis >= ledInterval)
+  {
+    ledPreviousMillis = currentMillis;
+    
+    if (ledState == LOW) {
+      ledState = HIGH;
+    } else {
+      ledState = LOW;
+    }
+    
+    digitalWrite(ledPin, ledState);
   }
   
 }
