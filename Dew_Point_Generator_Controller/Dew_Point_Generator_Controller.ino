@@ -1,8 +1,10 @@
+#include <RTClib.h>
 #include <Wire.h>
 #include <Adafruit_MCP4725.h>
 #define voltsIn A0
 
 Adafruit_MCP4725 dac;
+RTC_DS3231 rtc;
 
 struct tcontrol
 {
@@ -16,9 +18,9 @@ typedef struct tcontrol Tcontrol;
 #define DURATION_TEMPS 3  // define how many duration-temperature pairs you want to use
 
 Tcontrol tcontrols[DURATION_TEMPS] = {
-  { 1, 0 },   // define particular duration in minutes and temperature in celcius
-  { 1, 25 },  // same
-  { 1, 50 },  // same -and by the way, you can add more than you defined above, but they won't be used :)
+  { 10, 0 },   // define particular duration in minutes and temperature in celcius
+  { 10, 25 },  // same
+  { 10, 50 },  // same -and by the way, you can add more than you defined above, but they won't be used :)
 };
 
 //-------------------- END MODIFY THIS ----------------------
@@ -32,12 +34,11 @@ uint16_t temperature;
 
 Tcontrol tcontrol;
 
-// LED blinker stuff:
+// LED blinker variables:
 const int ledPin =  LED_BUILTIN;
 int ledState = LOW;
 const long ledInterval = 750;
 unsigned long ledPreviousMillis = 0;
-
 
 
 void setup(void) 
@@ -46,14 +47,39 @@ void setup(void)
   dac.begin(0x62); // The I2C Address of the MCP4725
   pinMode(ledPin, OUTPUT);
   
-  delay(250);
+  delay(3000); // wait for console opening
+
+
+//--------------------BEGIN Real Time Clock setup--------------------
+  if (! rtc.begin()) {
+    Serial.println();
+    Serial.println("Couldn't find RTC");
+    Serial.println();
+    while (1);
+  }
+
+  if (rtc.lostPower()) {
+    Serial.println();
+    Serial.println("RTC lost power, lets set the time!");
+    Serial.println();
+    // following line sets the RTC to the date & time this sketch was compiled
+    rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+    // This line sets the RTC with an explicit date & time, for example to set
+    // January 21, 2014 at 3am you would call:
+    // rtc.adjust(DateTime(2014, 1, 21, 3, 0, 0));
+  }
+//--------------------END Real Time Clock setup--------------------
+
   
   tcontrol = tcontrols[0];
   temperature = tcontrol.celcius;
   durationTime = (unsigned long)tcontrol.duration*60*1000; // multiplies minutes in duration to milliseconds
-  durationTime = 3000; // Shortening durationTime for testing
+//  durationTime = 3000; // Shortening durationTime for testing
   currentMillis = millis();
   previousMillis = currentMillis;
+
+  printDateAndSettings();
+  
   setTemperature(temperature);
 }
 
@@ -65,14 +91,18 @@ void loop(void)
   
   if(currentMillis - previousMillis > durationTime)  // if set duration has passed, set next temperature and duration
   {
-    previousMillis = currentMillis;
+    
     x = x+1;
     if(x >= DURATION_TEMPS) x=0;
     tcontrol = tcontrols[x];
     temperature = tcontrol.celcius;
-    setTemperature(temperature);
     durationTime = (unsigned long)tcontrol.duration*60*1000;
-    durationTime = 3000; // Shortening durationTime for testing
+//    durationTime = 3000; // Shortening durationTime for testing
+    previousMillis = currentMillis;
+    
+    printDateAndSettings();
+    
+    setTemperature(temperature);
   }
   
   if (currentMillis - ledPreviousMillis >= ledInterval)
@@ -87,6 +117,33 @@ void loop(void)
     
     digitalWrite(ledPin, ledState);
   }
+  
+}
+
+
+
+void printDateAndSettings()
+{
+  DateTime now = rtc.now();
+  
+  Serial.println();
+  Serial.print("Started at:\t");
+  Serial.print(now.year(), DEC);
+  Serial.print('/');
+  Serial.print(now.month(), DEC);
+  Serial.print('/');
+  Serial.print(now.day(), DEC);
+  Serial.print(" ");
+  Serial.print(now.hour(), DEC);
+  Serial.print(':');
+  Serial.print(now.minute(), DEC);
+  Serial.print(':');
+  Serial.print(now.second(), DEC);
+  Serial.println();
+  
+  Serial.print("Settings:\t");
+  Serial.print("Duration in min: ");
+  Serial.print(tcontrol.duration);
   
 }
 
@@ -108,7 +165,7 @@ void setTemperature(uint16_t temperature)
   adcValueRead = analogRead(voltsIn);
   voltageRead = (adcValueRead * 5.0 )/ 1024.0;  // gets analog reading (analogread results in an integer between 0 and 1024 (resolution), so multiply it by the max. voltage and divide it by the resolution) 
   
-  Serial.print("DAC Value: ");
+  Serial.print("\tDAC Value: ");
   Serial.print(dac_value);
   
   Serial.print("\tExpected temperature: ");
